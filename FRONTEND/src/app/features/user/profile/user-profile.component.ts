@@ -67,18 +67,11 @@ import { ToastService } from '../../../shared/services/toast.service';
           <form [formGroup]="userForm" (ngSubmit)="onSave()" class="user-form">
             <div class="grid-2">
               <app-input
-                id="user-email"
-                label="Primary Email"
-                type="email"
-                placeholder="e.g. user@vaultone.com"
-                formControlName="email"
-                [required]="true"
-              ></app-input>
-
-              <app-input
                 id="user-phone"
                 label="Mobile Phone"
-                placeholder="+91 9876543210"
+                placeholder="9876543210"
+                prefix="+91"
+                maxlength="10"
                 formControlName="phoneNumber"
               ></app-input>
             </div>
@@ -213,8 +206,7 @@ export class UserProfileComponent implements OnInit {
 
   ngOnInit(): void {
     this.userForm = this.fb.group({
-      email: ['', [Validators.required, Validators.email]],
-      phoneNumber: [''],
+      phoneNumber: ['', [Validators.pattern(/^[6-9]\d{9}$/)]],
       firstName: [''],
       lastName: [''],
       addressLine1: [''],
@@ -224,6 +216,13 @@ export class UserProfileComponent implements OnInit {
     });
 
     this.loadProfile();
+
+    this.userForm.get('phoneNumber')?.valueChanges.subscribe(value => {
+      const digits = String(value || '').replace(/\D/g, '').replace(/^91(?=\d{10}$)/, '');
+      if (digits !== value) {
+        this.userForm.get('phoneNumber')?.setValue(digits, { emitEvent: false });
+      }
+    });
   }
 
   loadProfile(): void {
@@ -257,8 +256,7 @@ export class UserProfileComponent implements OnInit {
 
   populateForm(p: UserProfileResponse): void {
     this.userForm.patchValue({
-      email: p.email,
-      phoneNumber: p.phoneNumber || '',
+      phoneNumber: this.normalizePhone(p.phoneNumber),
       firstName: p.firstName || '',
       lastName: p.lastName || '',
       addressLine1: p.addressLine1 || '',
@@ -274,6 +272,11 @@ export class UserProfileComponent implements OnInit {
     return parts.length > 0 ? parts.join(' ') : this.profile.username;
   }
 
+  private normalizePhone(value?: string): string {
+    const digits = String(value || '').replace(/\D/g, '');
+    return digits.length === 12 && digits.startsWith('91') ? digits.substring(2) : digits;
+  }
+
   onSave(): void {
     if (this.userForm.invalid || this.saving) return;
 
@@ -284,13 +287,11 @@ export class UserProfileComponent implements OnInit {
         this.profile = updated;
         this.toastService.success('Your profile details have been saved.', 'Profile Updated');
       },
-      error: () => {
+      error: (err) => {
         this.saving = false;
-        // Simulation
-        if (this.profile) {
-          Object.assign(this.profile, this.userForm.value);
-        }
-        this.toastService.success('Your profile details have been updated.', 'Profile Updated');
+        const message = err?.error?.message || err?.error?.detail || err?.message
+          || 'Your profile could not be saved.';
+        this.toastService.error(message, 'Profile Update Failed');
       }
     });
   }

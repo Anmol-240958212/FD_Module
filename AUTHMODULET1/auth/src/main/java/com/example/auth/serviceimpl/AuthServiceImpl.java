@@ -14,11 +14,14 @@ import com.example.auth.entity.AuthUsr;
 import com.example.auth.entity.CustDtl;
 import com.example.auth.entity.CustStsMstr;
 import com.example.auth.entity.CustTypMstr;
+import com.example.auth.entity.AddrTypMstr;
+import com.example.auth.entity.CustAddrCmpnt;
 import com.example.auth.repository.AuthRoleRepository;
 import com.example.auth.repository.AuthUsrRepository;
 import com.example.auth.repository.CustDtlRepository;
 import com.example.auth.repository.CustStsMstrRepository;
 import com.example.auth.repository.CustTypMstrRepository;
+import com.example.auth.repository.AddrTypMstrRepository;
 import com.example.auth.security.JwtService;
 import com.example.auth.service.AuthService;
 import com.example.auth.service.OtpPurpose;
@@ -65,6 +68,9 @@ public class AuthServiceImpl implements AuthService {
         private final OtpService otpService;
         private final PasswordEncoder passwordEncoder;
         private final com.example.auth.repository.LoginAuditRepository loginAuditRepository;
+
+        @Autowired
+        private AddrTypMstrRepository addrTypMstrRepository;
 
         @Autowired
         private AuditUtil auditUtil;
@@ -794,21 +800,10 @@ public class AuthServiceImpl implements AuthService {
                 AuthUsr authUsr = authUsrRepository.findByUsername(username)
                                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-                // Update email if provided and not blank, and check uniqueness if changed
-                if (request.getEmail() != null && !request.getEmail().isBlank()) {
-                        String newEmail = request.getEmail().trim().toLowerCase();
-                        if (!newEmail.equals(authUsr.getEmail())) {
-                                if (authUsrRepository.existsByEmail(newEmail)) {
-                                        throw new IllegalArgumentException(
-                                                        "Email is already registered by another user");
-                                }
-                                authUsr.setEmail(newEmail);
-                        }
-                }
-
                 // Update phone if provided and not blank, and check uniqueness if changed
                 if (request.getPhoneNumber() != null && !request.getPhoneNumber().isBlank()) {
-                        String newPhone = request.getPhoneNumber().trim();
+                        String newPhone = normalizeMobileNumber(request.getPhoneNumber());
+                        validateIndianMobileNumber(newPhone);
                         if (!newPhone.equals(authUsr.getPhoneNumber())) {
                                 if (authUsrRepository.existsByPhoneNumber(newPhone)) {
                                         throw new IllegalArgumentException(
@@ -818,8 +813,77 @@ public class AuthServiceImpl implements AuthService {
                         }
                 }
 
+                CustDtl customer = authUsr.getCustomer();
+                if (customer != null) {
+                        String first = trimToNull(request.getFirstName());
+                        String middle = trimToNull(request.getMiddleName());
+                        String last = trimToNull(request.getLastName());
+                        if (first != null || middle != null || last != null) {
+                                customer.setFullName(java.util.stream.Stream.of(first, middle, last)
+                                                .filter(java.util.Objects::nonNull)
+                                                .collect(java.util.stream.Collectors.joining(" ")));
+                                custDtlRepository.save(customer);
+                        }
+
+                        AuditData audit = auditUtil.updateAudit("USER_PROFILE_UPDATE");
+                        saveAddressComponent(customer, "ADDRESS_LINE_1", request.getAddressLine1(), audit);
+                        saveAddressComponent(customer, "ADDRESS_LINE_2", request.getAddressLine2(), audit);
+                        saveAddressComponent(customer, "CITY", request.getCity(), audit);
+                        saveAddressComponent(customer, "STATE", request.getState(), audit);
+                        saveAddressComponent(customer, "COUNTRY", request.getCountry(), audit);
+                        saveAddressComponent(customer, "POSTAL_CODE", request.getPostalCode(), audit);
+                }
+
                 authUsrRepository.save(authUsr);
                 return getUserProfile(username);
+        }
+
+        private String trimToNull(String value) {
+                if (value == null || value.isBlank()) return null;
+                return value.trim();
+        }
+
+        private void validateIndianMobileNumber(String mobileNumber) {
+                String digits = mobileNumber.replaceAll("\\D", "");
+                if (digits.length() == 12 && digits.startsWith("91")) {
+                        digits = digits.substring(2);
+                }
+                if (!digits.matches("[6-9]\\d{9}")) {
+                        throw new IllegalArgumentException(
+                                        "Mobile number must be a valid 10-digit Indian number starting with 6, 7, 8, or 9");
+                }
+        }
+
+        private String normalizeMobileNumber(String mobileNumber) {
+                String digits = mobileNumber.replaceAll("\\D", "");
+                if (digits.length() == 12 && digits.startsWith("91")) {
+                        return digits.substring(2);
+                }
+                return digits;
+        }
+
+        private void saveAddressComponent(CustDtl customer, String typeName, String value, AuditData audit) {
+                if (value == null || value.isBlank()) return;
+                AddrTypMstr type = addrTypMstrRepository.findByAddressType(typeName)
+                                .orElseThrow(() -> new IllegalStateException("Invalid address type: " + typeName));
+                CustAddrCmpnt component = custAddrCmpntRepository.findByCustomer(customer).stream()
+                                .filter(a -> a.getAddressType() != null
+                                                && typeName.equals(a.getAddressType().getAddressType()))
+                                .findFirst().orElseGet(CustAddrCmpnt::new);
+                component.setCustomer(customer);
+                component.setAddressType(type);
+                component.setAddressTypeValue(value.trim());
+                component.setEffectiveDate(audit.getEffectiveDate());
+                component.setCrudValue("U");
+                component.setUserId(audit.getUserId());
+                component.setWorkstationId(audit.getWorkstationId());
+                component.setProgramId(audit.getProgramId());
+                component.setHostTimestamp(audit.getHostTimestamp());
+                component.setLocalTimestamp(audit.getLocalTimestamp());
+                component.setAcceptanceTimestamp(audit.getAcceptanceTimestamp());
+                component.setAcceptanceTimestampUtcOffset(audit.getAcceptanceTimestampUtcOffset());
+                component.setUuid(audit.getUuid());
+                custAddrCmpntRepository.save(component);
         }
 
         /** Creates a persisted bank staff account using the existing STAFF role. */

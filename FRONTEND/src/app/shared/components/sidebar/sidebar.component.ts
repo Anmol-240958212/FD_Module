@@ -39,7 +39,7 @@ export interface NavItem {
             <a
               [routerLink]="item.route"
               routerLinkActive="active"
-              [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
+              [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' || item.route === '/customer/profile' }"
               class="nav-link"
             >
               <app-icon [name]="item.icon" [size]="18" class="nav-icon"></app-icon>
@@ -257,12 +257,17 @@ export interface NavItem {
       font-weight: 500;
       text-decoration: none;
       transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+      position: relative;
     }
     .profile-link:hover,
     .profile-link.active {
       background-color: var(--color-bg-elevated);
       border-color: var(--color-border-focus);
       color: var(--color-text-primary);
+    }
+    .profile-link.active {
+      font-weight: 600;
+      box-shadow: inset 3px 0 0 var(--color-accent);
     }
     .profile-link-icon {
       color: var(--color-text-secondary);

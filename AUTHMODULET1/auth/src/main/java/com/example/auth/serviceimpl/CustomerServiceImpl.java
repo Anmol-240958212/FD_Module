@@ -81,6 +81,8 @@ public class CustomerServiceImpl implements CustomerService {
             throw new IllegalStateException("No customer associated with this user");
         }
 
+        validateMobileIsUnique(request.getMobileNumber(), username, customer);
+
         String currentStatusCode = customer.getCustomerStatus() != null ? customer.getCustomerStatus().getStatusCode() : "KYC_PENDING";
         if ("LOCKED".equals(currentStatusCode) || "CLOSED".equals(currentStatusCode)) {
             throw new IllegalStateException("Cannot update KYC profile for a locked or closed account");
@@ -548,6 +550,37 @@ public class CustomerServiceImpl implements CustomerService {
             throw new IllegalArgumentException(
                     "Mobile number must be a valid 10-digit Indian number starting with 6, 7, 8, or 9");
         }
+    }
+
+    private void validateMobileIsUnique(String mobileNumber, String username, CustDtl customer) {
+        if (mobileNumber == null || mobileNumber.isBlank()) return;
+
+        String requestedDigits = mobileDigits(mobileNumber);
+
+        boolean usedByAnotherAuthUser = authUsrRepository.findAllByPhoneNumberIsNotNull().stream()
+                .anyMatch(user -> !username.equals(user.getUsername())
+                        && requestedDigits.equals(mobileDigits(user.getPhoneNumber())));
+        if (usedByAnotherAuthUser) {
+            throw new IllegalArgumentException("Mobile number is already registered by another user");
+        }
+
+        boolean usedByAnotherCustomer = custCntctDtlsRepository
+                .findByContactTypeContactType("MOBILE").stream()
+                .anyMatch(contact -> contact.getCustomer() != null
+                        && !customer.getCustomerIdentifier().equals(contact.getCustomer().getCustomerIdentifier())
+                        && requestedDigits.equals(mobileDigits(contact.getContactValue())));
+        if (usedByAnotherCustomer) {
+            throw new IllegalArgumentException("Mobile number is already registered by another customer");
+        }
+    }
+
+    private String mobileDigits(String mobileNumber) {
+        if (mobileNumber == null) return "";
+        String digits = mobileNumber.replaceAll("\\D", "");
+        if (digits.length() == 12 && digits.startsWith("91")) {
+            return digits.substring(2);
+        }
+        return digits;
     }
 }
 

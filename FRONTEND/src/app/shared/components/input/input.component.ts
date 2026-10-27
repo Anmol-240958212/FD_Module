@@ -18,7 +18,8 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
         <span *ngIf="required" class="required-star">*</span>
       </label>
 
-      <div class="input-wrapper" [class.password-input]="type === 'password'">
+      <div class="input-wrapper" [class.password-input]="type === 'password'" [class.prefixed-input]="prefix">
+        <span *ngIf="prefix" class="input-prefix">{{ prefix }}</span>
         <input
           [id]="id"
           [name]="name || id"
@@ -28,6 +29,7 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
           [readOnly]="readonly"
           [required]="required"
           [min]="min"
+          [attr.maxlength]="maxlength || null"
           [value]="value"
           [class.is-invalid]="!!error"
           class="form-input"
@@ -72,6 +74,19 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR } from '@angular/forms';
     .password-input .form-input {
       padding-right: 42px;
     }
+    .prefixed-input .form-input {
+      padding-left: 48px;
+    }
+    .input-prefix {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--color-text-secondary);
+      font-size: inherit;
+      pointer-events: none;
+      z-index: 1;
+    }
     .password-toggle {
       position: absolute;
       top: 50%;
@@ -109,6 +124,8 @@ export class AppInputComponent implements ControlValueAccessor {
   @Input() readonly = false;
   @Input() required = false;
   @Input() min: number | string | null = null;
+  @Input() maxlength: number | string | null = null;
+  @Input() prefix = '';
   @Input() error: string | null = null;
   @Input() hint: string | null = null;
 

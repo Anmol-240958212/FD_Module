@@ -19,6 +19,8 @@ public interface AuthUsrRepository extends JpaRepository<AuthUsr, Long> {
 
     boolean existsByPhoneNumber(String phoneNumber);
 
+    List<AuthUsr> findAllByPhoneNumberIsNotNull();
+
     boolean existsByUsername(String username);
 
 	Optional<AuthUsr> findByUsername(String username);

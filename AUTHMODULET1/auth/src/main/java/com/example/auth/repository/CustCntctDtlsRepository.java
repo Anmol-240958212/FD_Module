@@ -10,4 +10,5 @@ import java.util.List;
 @Repository
 public interface CustCntctDtlsRepository extends JpaRepository<CustCntctDtls, Long> {
     List<CustCntctDtls> findByCustomer(CustDtl customer);
+    List<CustCntctDtls> findByContactTypeContactType(String contactType);
 }
